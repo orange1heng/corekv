@@ -76,3 +76,7 @@ func (c *CoreMap) keyToHash(key interface{}) uint64 {
 	}
 	return 0
 }
+
+func (c *CoreMap) Del(key []byte) {
+
+}

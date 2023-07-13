@@ -135,7 +135,7 @@ func (lm *levelManager) loadCache() {
 	// 添加 idx cache
 	for _, level := range lm.levels {
 		for _, table := range level.tables {
-			lm.cache.addIndex(table.ss.FID(), table)
+			lm.cache.addIndex(uint32(table.ss.FID()), table)
 		}
 	}
 }

@@ -29,7 +29,7 @@ func mmap(fd *os.File, writable bool, size int64) ([]byte, error) {
 	if writable {
 		mtype |= unix.PROT_WRITE
 	}
-	return unix.Mmap(int(fd.Fd()), 0, int(size), mtype, unix.MAP_SHARED)
+	return unix.Mmap(int(fd.Fd()), 0, int(size), mtype, unix.MAP_SHARED), nil
 }
 
 // mremap is a Linux-specific system call to remap pages in memory. This can be used in place of munmap + mmap.
