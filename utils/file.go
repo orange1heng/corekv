@@ -112,6 +112,7 @@ func CompareKeys(key1, key2 []byte) int {
 
 // VerifyChecksum crc32
 func VerifyChecksum(data []byte, expected []byte) error {
+	// 为什么转为uint64？为了兼容
 	actual := uint64(crc32.Checksum(data, CastagnoliCrcTable))
 	expectedU64 := BytesToU64(expected)
 	if actual != expectedU64 {

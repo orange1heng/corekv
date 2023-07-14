@@ -107,6 +107,7 @@ func (lm *levelManager) build() error {
 		if fID > maxFID {
 			maxFID = fID
 		}
+		// 调用openTable，传入lm（反引用
 		t := openTable(lm, fileName, nil)
 		lm.levels[tableInfo.Level].add(t)
 		lm.levels[tableInfo.Level].addSize(t) // 记录一个level的文件总大小
@@ -146,7 +147,7 @@ func (lm *levelManager) flush(immutable *memTable) (err error) {
 	return
 }
 
-//--------- level处理器 -------
+// --------- level处理器 -------
 type levelHandler struct {
 	sync.RWMutex
 	levelNum       int

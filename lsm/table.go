@@ -38,6 +38,7 @@ type table struct {
 	ref int32 // For file garbage collection. Atomic.
 }
 
+// 传入一个levelManager，叫做反引用
 func openTable(lm *levelManager, tableName string, builder *tableBuilder) *table {
 	sstSize := int(lm.opt.SSTableMaxSz)
 	if builder != nil {

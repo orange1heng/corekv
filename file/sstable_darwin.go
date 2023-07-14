@@ -1,3 +1,4 @@
+//go:build darwin
 // +build darwin
 
 // Copyright 2021 hardcore-os Project Authors
@@ -62,10 +63,12 @@ func (ss *SSTable) Init() error {
 	statType := stat.Sys().(*syscall.Stat_t)
 	ss.createdAt = time.Unix(statType.Atimespec.Sec, statType.Atimespec.Nsec)
 	// init min key
+	// 为什么需要复制？因为可能后面会有修改
 	keyBytes := ko.GetKey()
 	minKey := make([]byte, len(keyBytes))
 	copy(minKey, keyBytes)
 	ss.minKey = minKey
+	// 为什么把第一个key当做maxKey？而不是当前block最后一个key当做最大Key
 	ss.maxKey = minKey
 	return nil
 }

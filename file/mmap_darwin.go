@@ -46,6 +46,7 @@ func OpenMmapFileUsing(fd *os.File, sz int, writable bool) (*MmapFile, error) {
 	fileSize := fi.Size()
 	if sz > 0 && fileSize == 0 {
 		// If file is empty, truncate it to sz.
+		// 填充文件大小，最开始文件大小为0
 		if err := fd.Truncate(int64(sz)); err != nil {
 			return nil, errors.Wrapf(err, "error while truncation")
 		}
@@ -53,11 +54,14 @@ func OpenMmapFileUsing(fd *os.File, sz int, writable bool) (*MmapFile, error) {
 	}
 
 	// fmt.Printf("Mmaping file: %s with writable: %v filesize: %d\n", fd.Name(), writable, fileSize)
+	// 创建的文件和系统关联
 	buf, err := mmap.Mmap(fd, writable, fileSize) // Mmap up to file size.
 	if err != nil {
 		return nil, errors.Wrapf(err, "while mmapping %s with size: %d", fd.Name(), fileSize)
 	}
 
+	// 如果fileSize == 0，那么 sz 也为0，就没有执行上面的Truncate操作，底层文件可能还没有真正创建
+	// 所以这里强制性创建一下
 	if fileSize == 0 {
 		dir, _ := filepath.Split(filename)
 		go SyncDir(dir)

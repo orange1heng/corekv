@@ -57,7 +57,7 @@ type levelManifest struct {
 	Tables map[uint64]struct{} // Set of table id's
 }
 
-//TableMeta sst 的一些元信息
+// TableMeta sst 的一些元信息
 type TableMeta struct {
 	ID       uint64
 	Checksum []byte
@@ -109,6 +109,7 @@ func OpenManifestFile(opt *Options) (*ManifestFile, error) {
 func ReplayManifestFile(fp *os.File) (ret *Manifest, truncOffset int64, err error) {
 	r := &bufReader{reader: bufio.NewReader(fp)}
 	var magicBuf [8]byte
+	// 读取magicText 和 magicVersion
 	if _, err := io.ReadFull(r, magicBuf[:]); err != nil {
 		return &Manifest{}, 0, utils.ErrBadMagic
 	}
@@ -125,6 +126,7 @@ func ReplayManifestFile(fp *os.File) (ret *Manifest, truncOffset int64, err erro
 	var offset int64
 	for {
 		offset = r.count
+		// 读取 changes_len 和 crc
 		var lenCrcBuf [8]byte
 		_, err := io.ReadFull(r, lenCrcBuf[:])
 		if err != nil {
@@ -134,6 +136,8 @@ func ReplayManifestFile(fp *os.File) (ret *Manifest, truncOffset int64, err erro
 			return &Manifest{}, 0, err
 		}
 		length := binary.BigEndian.Uint32(lenCrcBuf[0:4])
+
+		// 读取真正的changes
 		var buf = make([]byte, length)
 		if _, err := io.ReadFull(r, buf); err != nil {
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
@@ -141,6 +145,7 @@ func ReplayManifestFile(fp *os.File) (ret *Manifest, truncOffset int64, err erro
 			}
 			return &Manifest{}, 0, err
 		}
+		// 校验checksum
 		if crc32.Checksum(buf, utils.CastagnoliCrcTable) != binary.BigEndian.Uint32(lenCrcBuf[4:8]) {
 			return &Manifest{}, 0, utils.ErrBadChecksum
 		}
@@ -222,6 +227,7 @@ func (r *bufReader) Read(p []byte) (n int, err error) {
 func (m *Manifest) asChanges() []*pb.ManifestChange {
 	changes := make([]*pb.ManifestChange, 0, len(m.Tables))
 	for id, tm := range m.Tables {
+		// fid create/delete level checksum
 		changes = append(changes, newCreateChange(id, int(tm.Level), tm.Checksum))
 	}
 	return changes
@@ -251,6 +257,7 @@ func (mf *ManifestFile) rewrite() error {
 	return nil
 }
 
+// 通过覆写的方式创建一个Manifest文件
 func helpRewrite(dir string, m *Manifest) (*os.File, int, error) {
 	rewritePath := filepath.Join(dir, utils.ManifestRewriteFilename)
 	// We explicitly sync.
@@ -263,6 +270,7 @@ func helpRewrite(dir string, m *Manifest) (*os.File, int, error) {
 	copy(buf[0:4], utils.MagicText[:])
 	binary.BigEndian.PutUint32(buf[4:8], uint32(utils.MagicVersion))
 
+	// 将当前数据库的状态全部抽象为changes对象，然后追加得到一个list
 	netCreations := len(m.Tables)
 	changes := m.asChanges()
 	set := pb.ManifestChangeSet{Changes: changes}
@@ -367,6 +375,7 @@ func (mf *ManifestFile) AddTableMeta(levelNum int, t *TableMeta) (err error) {
 // listing.
 func (mf *ManifestFile) RevertToManifest(idMap map[uint64]struct{}) error {
 	// 1. Check all files in manifest exist.
+	// 确保Manifest中存在的sst在workdir里都存在
 	for id := range mf.manifest.Tables {
 		if _, ok := idMap[id]; !ok {
 			return fmt.Errorf("file does not exist for table %d", id)
@@ -374,6 +383,7 @@ func (mf *ManifestFile) RevertToManifest(idMap map[uint64]struct{}) error {
 	}
 
 	// 2. Delete files that shouldn't exist.
+	// 删除Manifest中不存在但是workdir中存在的sst
 	for id := range idMap {
 		if _, ok := mf.manifest.Tables[id]; !ok {
 			utils.Err(fmt.Errorf("Table file %d  not referenced in MANIFEST", id))
