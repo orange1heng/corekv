@@ -94,7 +94,8 @@ func (m *memTable) Size() int64 {
 	return m.sl.MemSize()
 }
 
-//recovery
+// recovery
+// 返回一个新的 memtable 和恢复好了的之前的 ImmuTable
 func (lsm *LSM) recovery() (*memTable, []*memTable) {
 	// 从 工作目录中获取所有文件
 	files, err := ioutil.ReadDir(lsm.option.WorkDir)
@@ -125,11 +126,15 @@ func (lsm *LSM) recovery() (*memTable, []*memTable) {
 	sort.Slice(fids, func(i, j int) bool {
 		return fids[i] < fids[j]
 	})
+	if len(fids) != 0 {
+		atomic.StoreUint32(&lsm.maxMemFID, uint32(fids[len(fids)-1]))
+	}
 	imms := []*memTable{}
-	// 遍历fid 做处理
+	// 遍历fid, 逐一打开memtable对象
 	for _, fid := range fids {
 		mt, err := lsm.openMemTable(fid)
 		utils.CondPanic(err != nil, err)
+		// 如果memtable占用内存为0，说明wal文件没有对这个memtable作出任何修改（是一个新创建的内存表）
 		if mt.sl.MemSize() == 0 {
 			// mt.DecrRef()
 			continue
@@ -176,10 +181,14 @@ func (m *memTable) UpdateSkipList() error {
 	// if endOff < m.wal.Size() {
 	// 	return errors.WithMessage(utils.ErrTruncate, fmt.Sprintf("end offset: %d < size: %d", endOff, m.wal.Size()))
 	// }
+
+	// 做一个截断，防止磁盘空间浪费
 	return m.wal.Truncate(int64(endOff))
 }
 
 func (m *memTable) replayFunction(opt *Options) func(*utils.Entry, *utils.ValuePtr) error {
+	// 返回一个闭包函数
+	// 对kv分离做一个兼容
 	return func(e *utils.Entry, _ *utils.ValuePtr) error { // Function for replaying.
 		if ts := utils.ParseTs(e.Key); ts > m.maxVersion {
 			m.maxVersion = ts

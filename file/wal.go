@@ -87,6 +87,7 @@ func (wf *WalFile) Write(entry *utils.Entry) error {
 func (wf *WalFile) Iterate(readOnly bool, offset uint32, fn utils.LogEntry) (uint32, error) {
 	// For now, read directly from file, because it allows
 	reader := bufio.NewReader(wf.f.NewReader(int(offset)))
+	// 读取 kv 头
 	read := SafeRead{
 		K:            make([]byte, 10),
 		V:            make([]byte, 10),
@@ -170,6 +171,7 @@ func (r *SafeRead) MakeEntry(reader io.Reader) (*utils.Entry, error) {
 	e.Offset = r.RecordOffset
 	e.Hlen = hlen
 	buf := make([]byte, h.KeyLen+h.ValueLen)
+	// todo：分散聚集IO
 	if _, err := io.ReadFull(tee, buf[:]); err != nil {
 		if err == io.EOF {
 			err = utils.ErrTruncate
