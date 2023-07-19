@@ -14,7 +14,7 @@ type LSM struct {
 	maxMemFID  uint32
 }
 
-//Options _
+// Options _
 type Options struct {
 	WorkDir      string
 	MemTableSize int64
@@ -26,8 +26,8 @@ type Options struct {
 
 	// compact
 	NumCompactors       int
-	BaseLevelSize       int64
-	LevelSizeMultiplier int // 决定level之间期望的size比例
+	BaseLevelSize       int64 // 期望值
+	LevelSizeMultiplier int   // 决定level之间期望的size比例
 	TableSizeMultiplier int
 	BaseTableSize       int64
 	NumLevelZeroTables  int
@@ -75,6 +75,7 @@ func (lsm *LSM) StartCompacter() {
 	n := lsm.option.NumCompactors
 	lsm.closer.Add(n)
 	for i := 0; i < n; i++ {
+		// 这里可以不开go协程，直接运行
 		go lsm.levels.runCompacter(i)
 	}
 }

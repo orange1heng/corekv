@@ -118,6 +118,7 @@ func (iter *levelIterator) Seek(key []byte) {
 }
 
 // ConcatIterator 将table 数组链接成一个迭代器，这样迭代效率更高
+// 这个迭代器是假设所有table都是排序好了的
 type ConcatIterator struct {
 	idx     int // Which iterator is active now.
 	cur     utils.Iterator
@@ -251,7 +252,7 @@ type node struct {
 	// The two iterators are type asserted from `y.Iterator`, used to inline more function calls.
 	// Calling functions on concrete types is much faster (about 25-30%) than calling the
 	// interface's function.
-	merge  *MergeIterator
+	merge  *MergeIterator // merge和concat最多只有一个会有值
 	concat *ConcatIterator
 }
 
@@ -306,23 +307,30 @@ func (n *node) seek(key []byte) {
 }
 
 func (mi *MergeIterator) fix() {
+	// 1. 边界条件检查：
+	// 当前较大的无效，那么不需要调整
 	if !mi.bigger().valid {
 		return
 	}
+	// 当前small指向的node无效，直接指向另外一个返回
 	if !mi.small.valid {
 		mi.swapSmall()
 		return
 	}
+	// 2. 进入真正的fix过程：
+	// 比较较小的和较大的key
 	cmp := utils.CompareKeys(mi.small.entry.Key, mi.bigger().entry.Key)
 	switch {
 	case cmp == 0: // Both the keys are equal.
 		// In case of same keys, move the right iterator ahead.
+		// 相等的话，就移动一个让它变大一点
 		mi.right.next()
 		if &mi.right == mi.small {
 			mi.swapSmall()
 		}
 		return
 	case cmp < 0: // Small is less than bigger().
+		// 正常情况
 		if mi.reverse {
 			mi.swapSmall()
 		} else {
@@ -364,6 +372,9 @@ func (mi *MergeIterator) Next() {
 		if !bytes.Equal(mi.small.entry.Key, mi.curKey) {
 			break
 		}
+		// 如果相等的话（相同key不同版本），继续寻找下一个不相等key（相当于忽略了同一个key的多个版本，实现了删除）
+		// 当前只是一个简单的实现，直接删除老旧版本
+		// 如果加入了mvcc，需要判断一下事务是否结束，结束之后才能删除那个老旧的版本，否则还是要返回写入到新的sst
 		mi.small.next()
 		mi.fix()
 	}
@@ -387,8 +398,10 @@ func (mi *MergeIterator) Rewind() {
 
 // Seek brings us to element with key >= given key.
 func (mi *MergeIterator) Seek(key []byte) {
+	// 后续遍历：先对左子树遍历，再对右子树遍历
 	mi.left.seek(key)
 	mi.right.seek(key)
+	// 调整MergeIterator的small属性的指向，small始终指向下游节点中较小的那一个
 	mi.fix()
 	mi.setCurrent()
 }
@@ -430,6 +443,7 @@ func NewMergeIterator(iters []utils.Iterator, reverse bool) utils.Iterator {
 		mi.small = &mi.left
 		return mi
 	}
+	// len(iters) > 2，二分递归创建
 	mid := len(iters) / 2
 	return NewMergeIterator(
 		[]utils.Iterator{
